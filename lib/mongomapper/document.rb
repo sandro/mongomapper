@@ -11,6 +11,7 @@ module MongoMapper
         include SaveWithValidation
         include RailsCompatibility::Document
         extend ClassMethods
+        validate :embedded_document_validity
       end
 
       descendants << model
@@ -317,7 +318,20 @@ module MongoMapper
         assign_id
         save_to_collection
       end
-      
+
+      def embedded_document_validity
+        all_embedded_documents.each do |doc|
+          unless doc.valid?
+            class_name = doc.class.name.humanize
+            doc.errors.errors.each do |attribute, error_messages|
+              error_messages.each do |error|
+                errors.add("#{class_name} #{attribute}", error)
+              end
+            end
+          end
+        end
+      end
+
       def assign_id
         if read_attribute(:_id).blank?
           write_attribute(:_id, XGen::Mongo::Driver::ObjectID.new.to_s)

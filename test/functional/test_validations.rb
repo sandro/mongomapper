@@ -62,7 +62,71 @@ class ValidationsTest < Test::Unit::TestCase
       @doc.errors.full_messages.should == ["Name can't be empty"]
     end
   end
-  
+
+  context "Saving a new document with invalid embedded documents" do
+    setup do
+      ::Location = Class.new do
+        include MongoMapper::EmbeddedDocument
+        key :city, :required => true
+      end
+
+      ::Battery = Class.new do
+        include MongoMapper::EmbeddedDocument
+        key :capacity, :required => true
+      end
+
+      ::Phone = Class.new do
+        include MongoMapper::EmbeddedDocument
+        key :number, :required => true
+        many :batteries
+      end
+
+      @document = Class.new do
+        include MongoMapper::Document
+        many :locations
+        many :phones
+      end
+      @document.collection.clear
+    end
+
+    teardown do
+      Object.send(:remove_const, :Location)
+      Object.send(:remove_const, :Battery)
+      Object.send(:remove_const, :Phone)
+    end
+
+    should "not insert document with invalid address" do
+      doc = @document.new :locations => [Location.new]
+      doc.save.should be_false
+      @document.count.should == 0
+    end
+
+    should "populate document's errors with the errors of Location" do
+      doc = @document.new :locations => [Location.new]
+      doc.save.should be_false
+      doc.errors.size.should == 1
+      doc.errors.full_messages.should == ["Location city can't be empty"]
+    end
+
+    should "populate document's errors with the errors of Location and Phone" do
+      doc = @document.new :locations => [Location.new], :phones => [Phone.new]
+      doc.save.should be_false
+      doc.errors.size.should == 2
+      doc.errors.full_messages.should include("Location city can't be empty")
+      doc.errors.full_messages.should include("Phone number can't be empty")
+    end
+
+    should "populate document's errors with deeply nested errors" do
+      phone = Phone.new :batteries => [Battery.new]
+      doc = @document.new :locations => [Location.new], :phones => [phone]
+      doc.save.should be_false
+      doc.errors.size.should == 3
+      doc.errors.full_messages.should include("Location city can't be empty")
+      doc.errors.full_messages.should include("Phone number can't be empty")
+      doc.errors.full_messages.should include("Battery capacity can't be empty")
+    end
+  end
+
   context "Adding validation errors" do
     setup do
       @document = Class.new do
