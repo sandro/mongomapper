@@ -523,4 +523,69 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
       end
     end
   end # instance of a embedded document
+
+  context "retrieving all embedded documents" do
+    setup do
+      ::Doc = Class.new do
+        include MongoMapper::Document
+        key :folder_id
+        belongs_to :folder
+        many :parents
+      end
+
+      ::Folder = Class.new do
+        include MongoMapper::Document
+        many :docs
+      end
+
+      ::Toy = Class.new do
+        include MongoMapper::EmbeddedDocument
+      end
+
+      Child.class_eval { many :toys }
+
+      Parent.class_eval do
+        many :children
+        belongs_to :doc
+      end
+    end
+
+    teardown do
+      Object.send(:remove_const, :Doc)
+      Object.send(:remove_const, :Folder)
+      Object.send(:remove_const, :Toy)
+    end
+
+    should "not return an associated MongoMapper::Document" do
+      doc = Doc.new
+      folder = Folder.new :docs => [doc]
+      folder.all_embedded_documents.should_not include(doc)
+    end
+
+    should "exclude belongs_to associations" do
+      folder = Folder.new
+      doc = Doc.new :folder => folder
+      doc.all_embedded_documents.should_not include(folder)
+    end
+
+
+    should "find all embedded documents for a MongoMapper::Document" do
+      toy = Toy.new
+      child = Child.new :toys => [toy]
+      parent = Parent.new :children => [child]
+      doc = Doc.new :parents => [parent]
+      doc.all_embedded_documents.should include(parent, child, toy)
+    end
+
+    should "find all embedded documents for a MongoMapper::EmbeddedDocument" do
+      toy1 = Toy.new
+      toy2 = Toy.new
+      child = Child.new :toys => [toy1, toy2]
+      child.all_embedded_documents.should include(toy1, toy2)
+    end
+
+    should "return an empty array for a MongoMapper::Document with no embedded documents" do
+      Grandparent.new.all_embedded_documents.should be_empty
+    end
+  end
 end

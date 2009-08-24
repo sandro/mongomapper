@@ -167,6 +167,17 @@ module MongoMapper
         end
       end
 
+      def all_embedded_documents
+        self.class.associations.map do |name, association|
+          if association.many? && !association.klass.ancestors.include?(MongoMapper::Document)
+            embedded_documents = send(association.name)
+            embedded_documents.map do |doc|
+              doc.all_embedded_documents
+            end.unshift(embedded_documents)
+          end
+        end.flatten.compact.uniq
+      end
+
       def attributes=(attrs)
         return if attrs.blank?
         attrs.each_pair do |name, value|
